@@ -36,6 +36,8 @@ const
   csIniCONFIGRegistraTickDif = 'RegistraTickDif';
   csIniCONFIGDescartarCombustible= 'DescartarCombustible';
   csIniCONFIGConexionOG = 'ConexionOG';
+  csIniCONFIGLicencia = 'Licencia';
+  csIniCONFIGFechaVence = 'FechaVence';
 
 type
   TIniAju = class(TObject)
@@ -68,6 +70,8 @@ type
     FCONFIGRegistraTickDif: string;
     FCONFIGDescartarCombustible: string;
     FCONFIGConexionOG: string;
+    FCONFIGLicencia: String;
+    FCONFIGFechaVence: String;
   public
     procedure LoadSettings(Ini: TIniFile);
     procedure SaveSettings(Ini: TIniFile);
@@ -103,6 +107,8 @@ type
     property CONFIGRegistraTickDif: string read FCONFIGRegistraTickDif write FCONFIGRegistraTickDif;
     property CONFIGDescartarCombustible: string read FCONFIGDescartarCombustible write FCONFIGDescartarCombustible;
     property CONFIGConexionOG: string read FCONFIGConexionOG write FCONFIGConexionOG;
+    property CONFIGLicencia: string read FCONFIGLicencia write FCONFIGLicencia;
+    property CONFIGFechaVence: string read FCONFIGFechaVence write FCONFIGFechaVence;
   end;
 
 var
@@ -142,6 +148,8 @@ begin
     FCONFIGRegistraTickDif := Ini.ReadString(csIniCONFIGSection, csIniCONFIGRegistraTickDif, 'No');
     FCONFIGDescartarCombustible := Ini.ReadString(csIniCONFIGSection, csIniCONFIGDescartarCombustible, '0');
     FCONFIGConexionOG := Ini.ReadString(csIniCONFIGSection, csIniCONFIGConexionOG, '');
+    FCONFIGLicencia := Ini.ReadString(csIniCONFIGSection, csIniCONFIGLicencia, '');
+    FCONFIGFechaVence := Ini.ReadString(csIniCONFIGSection, csIniCONFIGFechaVence, '');
   end;
 end;
 
@@ -177,6 +185,8 @@ begin
     Ini.WriteString(csIniCONFIGSection, csIniCONFIGRegistraTickDif, FCONFIGRegistraTickDif);
     Ini.WriteString(csIniCONFIGSection, csIniCONFIGDescartarCombustible, FCONFIGDescartarCombustible);
     Ini.WriteString(csIniCONFIGSection, csIniCONFIGConexionOG, FCONFIGConexionOG);
+    Ini.WriteString(csIniCONFIGSection, csIniCONFIGLicencia, FCONFIGLicencia);
+    Ini.WriteString(csIniCONFIGSection, csIniCONFIGFechaVence, FCONFIGFechaVence);
   end;
 end;
 

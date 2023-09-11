@@ -233,6 +233,9 @@ var
   de6a6,REGISTRATICKDIF: Boolean;
   fhinicial,fhfinal:TDateTime;
   id1:Integer;
+  cierreDirecto:Boolean;
+  Licencia:String;
+  FechaVence:TDateTime;
   _NOMBRESCOMBUSTIBLES: Array[1..3] of string;
 
   // Variables para el ajuste por turno administrativo
@@ -1322,6 +1325,8 @@ begin
 
     DESCARTACOMB := StrToIntDef(Config.CONFIGDescartarCombustible,0);
     CONEXION_OG  := Config.CONFIGConexionOG;
+    Licencia     := Config.CONFIGLicencia;
+    FechaVence   := StrToDateDef(Config.CONFIGFechaVence,0);
   except
     on e: Exception do begin
       FAJUMENU.Caption := e.Message;
@@ -1387,31 +1392,29 @@ begin
      with FAJUMENU do begin
         bitaAju.Add(FormatDateTime('dd/mm/yyyy hh:nn:ss.zzz',now)+' aplica_cambios ');
         Mem_Datos.First;
-        DBCONSOLA.Params[0]:='USER NAME='+VsDataBaseUsu;
-        DBCONSOLA.Params[1]:='PASSWORD='+VsDataBaseClave;
-        DBCONSOLA.Open;
+        if not DBCONSOLA.Connected then begin
+          DBCONSOLA.Params[0]:='USER NAME='+VsDataBaseUsu;
+          DBCONSOLA.Params[1]:='PASSWORD='+VsDataBaseClave;
+          DBCONSOLA.Open;
+        end;         
         if CONEXION_OG<>'' then
           dll := CreateOleObject('ConexionSQL.UpdateTickets');
         while not Mem_Datos.Eof do begin
           if Mem_Datostag.AsFloat <> 0 then begin
+            QL_Cons.Params[0].AsFloat   := AjustaFloat(Mem_DatosAjuste.AsFloat,2);  //Mem_DatosVolumen.AsFloat - Mem_DatosDatosAju.AsFloat; //volumen
+            QL_Cons.Params[1].AsFloat   := AjustaFloat(Mem_DatosAjuste.AsFloat*Mem_DatosPrecio.AsFloat,0);//importe
+            QL_Cons.Params[3].AsInteger := Mem_DatosFolio.AsInteger;
+            QL_Cons.Params[2].AsString  := EncriptaCadena(NUMEROESTACION, FormatFloat('###0.00', Mem_DatosImporte.AsFloat));
             try
-              QL_Cons.Params[0].AsFloat   := AjustaFloat(Mem_DatosAjuste.AsFloat,2);  //Mem_DatosVolumen.AsFloat - Mem_DatosDatosAju.AsFloat; //volumen
-              QL_Cons.Params[1].AsFloat   := AjustaFloat(Mem_DatosAjuste.AsFloat*Mem_DatosPrecio.AsFloat,0);//importe
-              QL_Cons.Params[3].AsInteger := Mem_DatosFolio.AsInteger;
-              QL_Cons.Params[2].AsString  := EncriptaCadena(NUMEROESTACION, FormatFloat('###0.00', Mem_DatosImporte.AsFloat));
-              try
-                QL_Cons.ExecSQL;
-                if CONEXION_OG<>'' then begin
-                  resp:=dll.ActualizarIdTicket(Mem_DatosFolioOG.AsInteger,AjustaFloat(Mem_DatosAjuste.AsFloat*Mem_DatosPrecio.AsFloat,0),AjustaFloat(Mem_DatosAjuste.AsFloat,2),CONEXION_OG);
-                  if StrToFloatDef(resp,-99)=-99 then
-                    raise Exception.Create(resp);
-                end;
-              except
-                on E:Exception do
-                  mmo1.Lines.Add(e.Message);
+              QL_Cons.ExecSQL;
+              if CONEXION_OG<>'' then begin
+                resp:=dll.ActualizarIdTicket(Mem_DatosFolioOG.AsInteger,AjustaFloat(Mem_DatosAjuste.AsFloat*Mem_DatosPrecio.AsFloat,0),AjustaFloat(Mem_DatosAjuste.AsFloat,2),CONEXION_OG);
+                if StrToFloatDef(resp,-99)=-99 then
+                  raise Exception.Create(resp);
               end;
-            finally
-
+            except
+              on E:Exception do
+                mmo1.Lines.Add(e.Message);
             end;
 
             if (ExisteFolioEnClaves(Mem_DatosFolio.AsInteger)) then
@@ -1419,9 +1422,9 @@ begin
             else begin
               try
                 QInsertaAju2 := TADIQuery.Create('INSERT INTO CLAVES (FOLIO, FECHA, CORTE, VOLUMEN1, VOLUMEN2, ' +
-                                                 'COMBUSTIBLE, PRECIO, IMPORTE, FECHAADMIN, TURNOADMIN) VALUES ('+
+                                                 'COMBUSTIBLE, PRECIO, IMPORTE, FECHAADMIN, TURNOADMIN, IDTRANSACCIONOG) VALUES ('+
                                                  ':FOLIO, :FECHA, :CORTE, :VOLUMEN1, :VOLUMEN2, :COMBUSTIBLE, ' +
-                                                 ':PRECIO, :IMPORTE, :FECHAADMIN, :TURNOADMIN)');
+                                                 ':PRECIO, :IMPORTE, :FECHAADMIN, :TURNOADMIN, :IDTRANSACCIONOG)');
                 QInsertaAju2.Params[0].AsInteger := Mem_DatosFolio.AsInteger;
                 QInsertaAju2.Params[1].Value := fechax;
                 QInsertaAju2.Params[2].AsInteger := cortex;
@@ -1432,6 +1435,7 @@ begin
                 QInsertaAju2.Params[7].AsFloat := Mem_DatosImporte.AsFloat;
                 QInsertaAju2.Params[8].AsDateTime := Mem_DatosFechaAdmin.AsDateTime;
                 QInsertaAju2.Params[9].AsInteger  := Mem_DatosTurnoAdmin.AsInteger;
+                QInsertaAju2.Params[10].AsInteger  := Mem_DatosFolioOG.AsInteger;
                 try
                   QInsertaAju2.ExecQuery;
                 except
@@ -2441,11 +2445,14 @@ procedure TFAJUMENU.RollBack1Click(Sender: TObject);
 var
   Q_Tags,Q_RollBack, quBorraFecha, quBorraMovi:TADIQuery;
   Q_Rb: TPANQuery;
+  dll : OleVariant;
+  resp:string;
+  corte_OG:Integer;
 begin
    if Application.MessageBox('¿Deshacer ajuste?','aj',4+MB_ICONQUESTION)=IDYES then begin
 
      try
-       Q_RollBack := TADIQuery.Create('SELECT  VOLUMEN1,  IMPORTE, PRECIO, FOLIO FROM CLAVES WHERE FECHA=:FECHA AND CORTE=:CORTE');
+       Q_RollBack := TADIQuery.Create('SELECT  VOLUMEN1,  IMPORTE, PRECIO, FOLIO, IDTRANSACCIONOG FROM CLAVES WHERE FECHA=:FECHA AND CORTE=:CORTE');
 
        quBorraFecha := TADIQuery.Create('DELETE FROM FECHAS WHERE FECHA=:FECHA AND CORTE=:CORTE');
 
@@ -2453,12 +2460,26 @@ begin
 
        Q_Rb := TPANQuery.Create('UPDATE DPVGMOVI SET VOLUMEN=:VOLUMEN, IMPORTE=:IMPORTE, PRECIO=:PRECIO, TAG = 0 WHERE FOLIO=:FOLIO');
 
+       if CONEXION_OG<>'' then
+         dll := CreateOleObject('ConexionSQL.UpdateTickets');
+
        Q_RollBack.Close;
        Q_RollBack.Params[0].Value:=memFechasFECHA.AsDateTime;
        Q_RollBack.Params[1].AsInteger:=memFechasCORTE.AsInteger;
        Q_RollBack.ExecQuery;
        if Q_RollBack.RowsAffected>0 then begin
           while not Q_RollBack.Eof do begin
+            try
+              if CONEXION_OG<>'' then begin
+                resp:=dll.ActualizarIdTicket(Q_RollBack.Fields[4].AsInteger,Q_RollBack.Fields[1].AsFloat,Q_RollBack.Fields[0].AsFloat,CONEXION_OG);
+                if StrToFloatDef(resp,-99)=-99 then
+                  raise Exception.Create(resp);
+              end;
+            except
+              on E:Exception do
+                mmo1.Lines.Add(e.Message);
+            end;
+
              Q_Rb.Close;
              Q_Rb.Params[0].AsFloat:=Q_RollBack.Fields[0].AsFloat;
              Q_Rb.Params[1].AsFloat:=Q_RollBack.Fields[1].AsFloat;
@@ -2497,6 +2518,10 @@ begin
           end;
 
           actualiza_corte(memFechasFECHA.AsDateTime,memFechasCORTE.AsInteger,true);
+
+          corte_OG:=ObtenerCorte_OG(memFechasFECHA.AsDateTime);
+          DetalleMangueras_OG(memFechasFECHA.AsDateTime,corte_OG);
+          DetalleProductos_OG(memFechasFECHA.AsDateTime,corte_OG);
        end
        else begin
             //ShowMessage('Nada que deshacer');
@@ -2670,6 +2695,7 @@ var
 begin
   if not FileExists('levanta.txt') then begin
     try
+      Carga_Conf;
       if not pasa_usuario('','',True) then
         Application.Terminate;
       Q_Licencia:=TPANQuery.Create('SELECT RAZONSOCIAL FROM DGENEMPR');
@@ -2678,33 +2704,26 @@ begin
       clavesis:='CVLA';
       version:='3.1';
       TipoLicencia:='Abierta';
-      try
-        Q_Conf := TPANQuery.Create('SELECT LICENCIA3 FROM DPVGCONF');
-        Q_Conf.ExecQuery;
-        CLAVEAUTOR := Q_Conf.Fields[0].AsString;
-      finally
-        Q_Conf.Free;
-      end;
 
-//      if not LicenciaValida2(razon_social,
-//                            clavesis,
-//                            version,
-//                            TipoLicencia,
-//                            CLAVEAUTOR,
-//                            1,
-//                            False,
-//                            1)
-//      then begin
-//        raise Exception.Create('Licencia del sistema no válida: ' + CLAVEAUTOR);
-//        Application.Terminate;
-//      end;
+      if not LicenciaValida2(razon_social,
+                            clavesis,
+                            version,
+                            TipoLicencia,
+                            Licencia,
+                            1,
+                            FechaVence>0,
+                            FechaVence)
+      then begin
+        MensajeErr('Licencia del sistema no válida: ' + Licencia);
+        puede_cerrar:=True;
+        cierreDirecto:=True;
+        Close;
+      end;
 
       refresca_tabla_cortes;
       refresca_tabla_fechas;
 
       NUMEROESTACION := ObtenerNumeroEstacion;
-
-      Carga_Conf;
 
       cargaCombustibles;
 
@@ -2778,8 +2797,12 @@ end;
 procedure TFAJUMENU.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
 begin
   if puede_cerrar then begin
-     CanClose := pasa_usuario('');
-     puede_cerrar := CanClose;
+     if cierreDirecto then
+       CanClose:=True
+     else begin
+       CanClose := pasa_usuario('');
+       puede_cerrar := CanClose;
+     end;
   end
   else begin
     FAJUMENU.Hide;
@@ -4676,7 +4699,6 @@ begin
   if CONEXION_OG<>'' then begin
     dll := CreateOleObject('ConexionSQL.UpdateTickets');
     try
-      MensajeInfo(FechaToStr(fecha));
       QL_Mang.ParamByName('FECHA').AsDate:=fecha;
       QL_Mang.Open;
       while not QL_Mang.Eof do begin
