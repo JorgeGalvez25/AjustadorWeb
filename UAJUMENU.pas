@@ -1413,8 +1413,9 @@ begin
                   raise Exception.Create(resp);
               end;
             except
-              on E:Exception do
-                mmo1.Lines.Add(e.Message);
+//              on E:Exception do
+//                mmo1.Lines.Add(e.Message);
+              on e:Exception do raise Exception.Create('Error aplicar cambios: '+e.Message);
             end;
 
             if (ExisteFolioEnClaves(Mem_DatosFolio.AsInteger)) then
@@ -1766,10 +1767,8 @@ begin
          if Mem_TanquesCombustible.AsInteger=combustible then begin
             InvInicial := InvInicial + Mem_TanquesInvInivial.AsFloat;
             InvFinal   := InvFinal + Mem_TanquesInvFinal.AsFloat;
-            Entradas   := Entradas + Mem_TanquesEntradas.AsFloat;
-            if RestarMerma then begin
-              Entradas := Entradas + DameMerma(combustible,Mem_TanquesEntradas.AsFloat);
-            end
+            if RestarMerma then
+              Entradas := Entradas + DameMerma(combustible,Mem_TanquesEntradas.AsFloat)
             else
               Entradas   := Entradas + Mem_TanquesEntradas.AsFloat;
 
@@ -1949,7 +1948,7 @@ begin
              else begin
                if de6a6 then begin
                  Q_Docu:=TPANQuery.Create('SELECT SUM(VOLPEMEX) AS FACT FROM DPVGDOCU WHERE '+
-                                          'FOLIOENTRADA IN (SELECT FOLIO FROM DPVGETAN WHERE FECHA BETWEEN :FECHAI AND '+
+                                          'FOLIOENTRADA IN (SELECT FOLIO FROM DPVGETAN WHERE FECHAHORA BETWEEN :FECHAI AND '+
                                           ':FECHAF AND COMBUSTIBLE=:COMB AND TRASPASO=''No'')');
                  Q_Docu.ParamByName('FECHAI').AsDateTime:=fhinicial;
                  Q_Docu.ParamByName('FECHAF').AsDateTime:=fhfinal;
@@ -2146,7 +2145,7 @@ begin
        end;
      end
      else begin
-       ShowMessage('[Dt_Combustibles] Tabla Vacía');
+       ShowMessage('[Dt_Combustibles] Tabla Vacï¿½a');
        JvGIFAnimator1.Visible:=False;
        exit;
      end;
@@ -2278,7 +2277,7 @@ begin
 
 //     TIPOTAG:=3;
 
-     // Aquí empieza el ajuste en dos partes....
+     // Aquï¿½ empieza el ajuste en dos partes....
      litrosPrimerParte := 0;
      if Corte = 2 then
         antes6 := True
@@ -2449,7 +2448,7 @@ var
   resp:string;
   corte_OG:Integer;
 begin
-   if Application.MessageBox('¿Deshacer ajuste?','aj',4+MB_ICONQUESTION)=IDYES then begin
+   if Application.MessageBox('Deshacer ajuste?','aj',4+MB_ICONQUESTION)=IDYES then begin
 
      try
        Q_RollBack := TADIQuery.Create('SELECT  VOLUMEN1,  IMPORTE, PRECIO, FOLIO, IDTRANSACCIONOG FROM CLAVES WHERE FECHA=:FECHA AND CORTE=:CORTE');
@@ -2714,7 +2713,7 @@ begin
                             FechaVence>0,
                             FechaVence)
       then begin
-        MensajeErr('Licencia del sistema no válida: ' + Licencia);
+        MensajeErr('Licencia del sistema no valida: ' + Licencia);
         puede_cerrar:=True;
         cierreDirecto:=True;
         Close;
@@ -2824,7 +2823,7 @@ begin
      DeleteFile('C:\ImagenCo\Tmp\bitaaju.txt');
      bita.Clear;
    end;
-   bitaAju.Add(FormatDateTime('dd/mm/yyyy hh:nn:ss.zzz',now)+' se cerró sistema ');
+   bitaAju.Add(FormatDateTime('dd/mm/yyyy hh:nn:ss.zzz',now)+' se cerrï¿½ sistema ');
    bita.AddStrings(bitaAju);
    bita.SaveToFile('C:\ImagenCo\Tmp\bitaaju.txt');
    bita.Free;
@@ -2889,7 +2888,7 @@ begin
   if (chk1.Checked = true) then begin
 
     if (chkAjusteDiasHistorico.Checked = true) and (HayDiasSinAjustar) then
-       if Application.MessageBox('La opci`n de no ajustar días històricos esta activa por lo cual los días no ajustados quedaran asi, ¿Proseguir?', 'Ajuste', 4 + MB_ICONQUESTION ) = ID_YES then
+       if Application.MessageBox('La opci`n de no ajustar dï¿½as histï¿½ricos esta activa por lo cual los dï¿½as no ajustados quedaran asi, ï¿½Proseguir?', 'Ajuste', 4 + MB_ICONQUESTION ) = ID_YES then
           CambiaTagCortes;
   end;
 end;
@@ -3281,7 +3280,7 @@ var
     Q_Movi.Params[2].AsInteger := comb;
 
     Q_Movi.ExecQuery;
-    FAVANCE.PreparaAvance('Rollback día ' + fechaProceso + ' (' + nombreComb + ')...', True, Q_Movi.RowsAffected);
+    FAVANCE.PreparaAvance('Rollback dï¿½a ' + fechaProceso + ' (' + nombreComb + ')...', True, Q_Movi.RowsAffected);
 
     while not Q_Movi.Eof do begin
       Q_Aju := TADIQuery.Create('select * from claves where folio = :folio ');
@@ -3376,7 +3375,7 @@ var
     Q_Mov.Params[2].AsInteger := comb;
 
     Q_Mov.ExecQuery;
-    FAVANCE.PreparaAvance('Ajustando día ' + fechaProceso + ' (' + nombreComb + ')...', True, Q_Mov.RowsAffected);
+    FAVANCE.PreparaAvance('Ajustando dï¿½a ' + fechaProceso + ' (' + nombreComb + ')...', True, Q_Mov.RowsAffected);
 
     while not Q_Mov.Eof do begin
       if Q_Mov.FN('IMPORTE').AsDouble > MINIMOTICKET + 10 then begin
@@ -3468,7 +3467,7 @@ begin
             Q_Mov.Close;
             Q_Mov.Free;
 
-            // Ajustar las ventas hasta la liquidación
+            // Ajustar las ventas hasta la liquidaciï¿½n
             // Obtener todos los movimientos de las ventas del turno No Facturadas y No Impresas
             ajustar := metaLiq < sumaMov;
             while ajustar do begin
