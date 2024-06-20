@@ -721,6 +721,12 @@ object FAJUMENU: TFAJUMENU
     object Mem_AjuInvVeeder: TFloatField
       FieldName = 'InvVeeder'
     end
+    object Mem_AjuPrecio: TFloatField
+      FieldName = 'Precio'
+    end
+    object Mem_AjuVentasImp: TFloatField
+      FieldName = 'VentasImp'
+    end
   end
   object DataSource3: TDataSource
     DataSet = Mem_Aju
