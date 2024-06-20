@@ -140,6 +140,8 @@ type
     QL_ProdCOMBUSTIBLE: TIntegerField;
     QL_ProdVOLUMEN: TFloatField;
     QL_ProdIMPORTE: TFloatField;
+    Mem_AjuPrecio: TFloatField;
+    Mem_AjuVentasImp: TFloatField;
     procedure Button1Click(Sender: TObject);
     procedure SIBfibEventAlerter1EventAlert(Sender: TObject;
       EventName: String; EventCount: Integer);
@@ -237,6 +239,7 @@ var
   Licencia:String;
   FechaVence:TDateTime;
   _NOMBRESCOMBUSTIBLES: Array[1..3] of string;
+  marca:Integer;
 
   // Variables para el ajuste por turno administrativo
   VentasAdminitivo, SalidasAdmitivo, ajusteAdmitivo, EntradasAdmin, swJarreoAdmin : Double;
@@ -290,6 +293,7 @@ procedure selecciona_transacciones2_6_6(combustible:byte;meta:real);
 function alcanza_litros2_6_6(fecha: TDateTime; corte, turno, combustible: Integer; meta, minimo: Real): boolean;
 function alcanza_litros3_6_6(fecha: TDateTime; corte, turno, combustible: Integer; meta, minimo: Real): boolean;
 procedure cargaCombustibles;
+function dame_precio_combustible(AFechaFin: TDateTime;Combustible:Byte): Real;
 
 
 implementation
@@ -1339,9 +1343,10 @@ begin
   end;
 
   try
-    Q_Est := TPANQuery.Create('SELECT NOMBRE FROM DPVGESTS');
+    Q_Est := TPANQuery.Create('SELECT NOMBRE, TIPODISPENSARIO FROM DPVGESTS');
     Q_Est.ExecQuery;
     FAJUMENU.lblEstacion.Caption := Q_Est.Fields[0].AsString;
+    marca := Q_Est.Fields[1].AsInteger;
   except
     Q_Est.Free;
   end;
@@ -1547,9 +1552,9 @@ begin
 //     FAJUMENU.Mem_Datos.SaveToTextFile('c:\imagenco\tmp\logadidatos'+FormatDateTime('ddmmmyyyyhhmmss',now)+'.txt');
 end;
 
-procedure selecciona_transacciones2(combustible: byte; meta, primerAjuste: real);
+function selecciona_transacciones2(combustible: byte; meta, primerAjuste: real):real;
 var
-   Acumulado_tmp, Acumulado, ajuste, _ca: Real;
+   Acumulado_tmp, Acumulado, ajuste, _ca, ajustado: Real;
    c: Integer;
    menor_a_limite: boolean;
    total_ticket: real;
@@ -1560,13 +1565,14 @@ begin
     Acumulado := 0;
     Acumulado_tmp := 0;
     i := 2;
+    c := 100;
     menor_a_limite := false;
     _ca := MINIMOTICKET; //10;
 
     with FAJUMENU do begin
       i:=3;
       Mem_Datos.First;
-      while Acumulado < meta do begin
+      while (Acumulado < meta) and (c>0) do begin
         if Mem_DatosAjuste.AsFloat>0 then
           Acumulado_tmp := Mem_DatosAjuste.AsFloat * Mem_DatosPrecio.AsFloat
         else
@@ -1579,16 +1585,16 @@ begin
         if Acumulado_tmp > MINIMOTICKET then begin
           menor_a_limite := True;
           Mem_Datos.Edit;
-          ajuste := (1 / Mem_DatosPrecio.AsFloat) * 20;
+          ajuste := (1 / Mem_DatosPrecio.AsFloat) * 30 * IfThen(c<100, 2, 1);
 
           if ajuste > (Meta - Acumulado) then
             ajuste := Meta - Acumulado;
 
-          Acumulado := Acumulado + Ajuste;
-
-          if Mem_DatosAjuste.AsFloat - ajuste > 0 then begin
+          if (Mem_DatosAjuste.AsFloat - ajuste)*Mem_DatosPrecio.AsFloat > MINIMOTICKET then begin
             Mem_DatosAjuste.AsFloat := Mem_DatosAjuste.AsFloat - ajuste;
+            ajustado:=ajustado+ajuste;
             Mem_Datostag.AsInteger  := 1;
+            Acumulado := Acumulado + Ajuste;
           end;
 
           Mem_Datos.Post;
@@ -1597,19 +1603,13 @@ begin
         Mem_Datos.Next;
 
         if Mem_Datos.Eof then begin
-          if not menor_a_limite then
-            MINIMOTICKET := MINIMOTICKET - 10;
-
-          if MINIMOTICKET <= 5 then
-            Break;
-
-          menor_a_limite := false;
+          Dec(c);
           Mem_Datos.First;
-        end;
-
+        end;                     
       end;
       completa_historico(fechax, cortex, combustible, Acumulado + primerAjuste);
       MINIMOTICKET:=_ca;
+      Result:=ajustado*Mem_AjuPrecio.AsFloat;
     end
   except
     on e:exception do
@@ -1934,9 +1934,10 @@ begin
        QL_Recepcion2.ExecQuery;
        if Ql_Recepcion2.Fields[0].AsFloat>0 then begin
            if INCLUIR_VENTAS_DESCARGA='Si' then
-             entradaveeder := QL_Recepcion2.FieldByName('VOLUMENFISICO').AsFloat
+             entradaveeder := QL_Recepcion2.FieldByName('VOLUMENRECEPCION').AsFloat
            else
-             entradaveeder := QL_Recepcion2.FieldByName('VOLUMENRECEPCION').AsFloat;
+             entradaveeder := QL_Recepcion2.FieldByName('VOLUMENFISICO').AsFloat;
+
 
            if FUSIONTANQUES='Si' then begin
              if SOLOENTRADAS='Si' then begin
@@ -2058,7 +2059,7 @@ var
    acu: real;
    topetmp, ev, pEntradas: Real;
    antes6, seguirAjustando: Boolean;
-   jarreos:Double;
+   jarreos, totPendAjuImp,totAjustadoImp:Double;
    corte_OG:Integer;
 begin
  with FAJUMENU do begin
@@ -2173,6 +2174,8 @@ begin
        Mem_AjuInvVeeder.AsFloat := ev;
 
        Mem_AjuVentas.AsFloat:=ventas_turno(fecha,corte,i);
+       Mem_AjuPrecio.AsFloat:=dame_precio_combustible(fecha, i);
+       Mem_AjuVentasImp.AsFloat:=Mem_AjuVentas.AsFloat*Mem_AjuPrecio.AsFloat;
        Mem_AjuVentas_Dif.AsFloat:=Mem_AjuVentas.AsFloat-Mem_AjuSalida_Tanque.AsFloat;
        if Mem_AjuSalida_Tanque.AsFloat>0 then
           Mem_AjuPor_Dif.AsFloat:=((Mem_AjuVentas_Dif.AsFloat/Mem_AjuSalida_Tanque.AsFloat)*100)
@@ -2196,15 +2199,28 @@ begin
        quHistoria.ExecQuery;
        quHistoria.Commit;
 
-       // Obtener Y restar la cantidad de tag5 de la base para calcular la meta
-       case Mem_AjuCombustible.AsInteger of
-         1:Mem_AjuMax_Aju.AsFloat := ((Mem_AjuVentas.AsFloat - obtenerCantidadTag5(fecha, Corte, 1)) * PORCENTAJE);// + MERMAM;
-         2:Mem_AjuMax_Aju.AsFloat := ((Mem_AjuVentas.AsFloat - obtenerCantidadTag5(fecha, Corte, 2)) * PORCENTAJEP);// + MERMAP;
-         3:Mem_AjuMax_Aju.AsFloat := ((Mem_AjuVentas.AsFloat - obtenerCantidadTag5(fecha, Corte, 3)) * PORCENTAJED);// + MERMAD;
-       else
-           Mem_AjuMax_Aju.AsFloat := (Mem_AjuVentas.AsFloat - obtenerCantidadTag5(fecha, Corte, 1)) * PORCENTAJE ;
+       if TIPOTAG=4 then begin
+         case Mem_AjuCombustible.AsInteger of
+           1:Mem_AjuMax_Aju.AsFloat := (Mem_AjuVentasImp.AsFloat / (1+PORCENTAJE))*PORCENTAJE;// + MERMAM;
+           2:Mem_AjuMax_Aju.AsFloat := (Mem_AjuVentasImp.AsFloat / (1+PORCENTAJEP))*PORCENTAJEP;// + MERMAP;
+           3:Mem_AjuMax_Aju.AsFloat := (Mem_AjuVentasImp.AsFloat / (1+PORCENTAJED))*PORCENTAJED;// + MERMAD;
+         else
+           Mem_AjuMax_Aju.AsFloat := ((Mem_AjuVentasImp.AsFloat) / (1+PORCENTAJE))*PORCENTAJE;
+         end;
+         totPendAjuImp:=totPendAjuImp+Mem_AjuMax_Aju.AsFloat;
+         Mem_Aju.Post;
+       end
+       else begin
+         // Obtener Y restar la cantidad de tag5 de la base para calcular la meta
+         case Mem_AjuCombustible.AsInteger of
+           1:Mem_AjuMax_Aju.AsFloat := ((Mem_AjuVentas.AsFloat - obtenerCantidadTag5(fecha, Corte, 1)) * PORCENTAJE);// + MERMAM;
+           2:Mem_AjuMax_Aju.AsFloat := ((Mem_AjuVentas.AsFloat - obtenerCantidadTag5(fecha, Corte, 2)) * PORCENTAJEP);// + MERMAP;
+           3:Mem_AjuMax_Aju.AsFloat := ((Mem_AjuVentas.AsFloat - obtenerCantidadTag5(fecha, Corte, 3)) * PORCENTAJED);// + MERMAD;
+         else
+             Mem_AjuMax_Aju.AsFloat := (Mem_AjuVentas.AsFloat - obtenerCantidadTag5(fecha, Corte, 1)) * PORCENTAJE ;
+         end;
+         Mem_Aju.Post;
        end;
-       Mem_Aju.Post;
      end;
    finally
      quHistoria.Free;
@@ -2261,6 +2277,8 @@ begin
          LitrosAju := LitrosAju + obtenerPendiente(Mem_AjuCombustible.AsInteger, fecha, corte);
 
      end
+     else if TIPOTAG=4 then
+       LitrosAju:=Mem_AjuMax_Aju.AsFloat/Mem_AjuPrecio.AsFloat
      else
        LitrosAju:=Mem_AjuVentas_Dif.AsFloat;
 
@@ -2294,7 +2312,6 @@ begin
 
      if LitrosAju > 0 then begin
        llena_datos(fecha, corte, Mem_AjuCombustible.AsInteger, antes6);
-       Mem_Datos.SaveToTextFile('C:\ImagenCo\Mem_Datos.txt');
        if not alcanzan then begin
          mmo1.Lines.Add(DupeString('-', 50));
          mmo1.Lines.Add('No hay tickets impresos ' + Mem_AjuCombustible.AsString);
@@ -2304,9 +2321,9 @@ begin
          set_ajuste(fecha, Corte, Mem_AjuCombustible.AsInteger, 0);
          antes6 := False;
          Mem_Aju.Next;
+         Continue;
        end;
-       selecciona_transacciones2(Mem_AjuCombustible.AsInteger, LitrosAju, primerAjuste);
-       Mem_Datos.SaveToTextFile('C:\ImagenCo\Mem_Datos.txt');
+       totAjustadoImp:=totAjustadoImp+selecciona_transacciones2(Mem_AjuCombustible.AsInteger, LitrosAju, primerAjuste);
        aplica_cambios;
        primerAjuste := LitrosAju;
        case Mem_AjuCombustible.AsInteger of
@@ -2317,6 +2334,32 @@ begin
      end;
      antes6 := False;
      Mem_Aju.Next;
+   end;
+
+   if (TIPOTAG=4) and (totPendAjuImp-totAjustadoImp>10) then begin
+     if Corte = 2 then
+        antes6 := True
+     else
+        antes6 := False;
+     Mem_Aju.First;
+     while not Mem_Aju.Eof do begin
+       if (totPendAjuImp-totAjustadoImp>10) then begin
+         Mem_Datos.Close;
+         Mem_Datos.Open;
+         llena_datos(fecha, corte, Mem_AjuCombustible.AsInteger, antes6);
+         if not alcanzan then begin
+           alcanzan := true;
+           Mem_Aju.Next;
+           Continue;
+         end;
+
+         totAjustadoImp:=totAjustadoImp+selecciona_transacciones2(Mem_AjuCombustible.AsInteger, (totPendAjuImp-totAjustadoImp)/Mem_AjuPrecio.AsFloat, primerAjuste);
+         aplica_cambios;
+         Mem_Aju.Next;
+       end
+       else
+         Break;
+     end;
    end;
 
    corte_OG:=ObtenerCorte_OG(fecha);
@@ -4752,6 +4795,23 @@ begin
       raise Exception.Create(resp);
     Result:=StrToInt(resp)
   end;
+end;
+
+function dame_precio_combustible(AFechaFin: TDateTime;Combustible:Byte): Real;
+var
+  Q_Claves:TPANQuery;
+begin
+  try
+    Q_Claves:=TPANQuery.Create('SELECT FIRST 1 PRECIO FROM DPVGPREC WHERE FECHAHORA<=:FECHA AND COMBUSTIBLE=:COMBUSTIBLE ORDER BY FECHAHORA DESC');
+    Q_Claves.Params[0].AsDateTime := AFechaFin;
+    Q_Claves.Params[1].AsShort    := Combustible;
+    Q_Claves.ExecQuery;
+
+    Result := Q_Claves.Fields[0].AsFloat;
+  finally
+    Q_Claves.Free;
+  end;
+
 end;
 
 initialization
