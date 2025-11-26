@@ -2747,6 +2747,7 @@ begin
       version:='3.1';
       TipoLicencia:='Abierta';
 
+      if marca=8 then
       if not LicenciaValida2(razon_social,
                             clavesis,
                             version,
