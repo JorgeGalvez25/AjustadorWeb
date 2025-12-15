@@ -1841,4 +1841,11 @@ object FAJUMENU: TFAJUMENU
       FieldName = 'IMPORTE'
     end
   end
+  object tmrOculta: TTimer
+    Enabled = False
+    Interval = 10
+    OnTimer = tmrOcultaTimer
+    Left = 201
+    Top = 518
+  end
 end

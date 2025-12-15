@@ -142,6 +142,7 @@ type
     QL_ProdIMPORTE: TFloatField;
     Mem_AjuPrecio: TFloatField;
     Mem_AjuVentasImp: TFloatField;
+    tmrOculta: TTimer;
     procedure Button1Click(Sender: TObject);
     procedure SIBfibEventAlerter1EventAlert(Sender: TObject;
       EventName: String; EventCount: Integer);
@@ -170,6 +171,7 @@ type
     procedure WMHotKey(var Msg: TWMHotKey); message WM_HOTKEY;
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
+    procedure tmrOcultaTimer(Sender: TObject);
   private
     { Private declarations }
     procedure monitorea_cortes;
@@ -222,7 +224,7 @@ var
   ES_AUTOMATICO: Boolean;
   TOPE_MAXIMO: Currency;
   DIF_MAXIMA: Real;
-  INCLUIR_VENTAS_DESCARGA, USARTABLAMERMAS, CONEXION_OG: String;
+  INCLUIR_VENTAS_DESCARGA, USARTABLAMERMAS, CONEXION_OG, PIDE_PASSWORD_INICIO: String;
   InvInicial, InvFinal, Entradas: Currency;
   es_manual: boolean = false;
   puede_cerrar: boolean = false;
@@ -1331,6 +1333,8 @@ begin
     CONEXION_OG  := Config.CONFIGConexionOG;
     Licencia     := Config.CONFIGLicencia;
     FechaVence   := StrToDateDef(Config.CONFIGFechaVence,0);
+
+    PIDE_PASSWORD_INICIO:=Config.CONFIGPidePasswordInicio;
   except
     on e: Exception do begin
       FAJUMENU.Caption := e.Message;
@@ -1934,9 +1938,9 @@ begin
        QL_Recepcion2.ExecQuery;
        if Ql_Recepcion2.Fields[0].AsFloat>0 then begin
            if INCLUIR_VENTAS_DESCARGA='Si' then
-             entradaveeder := QL_Recepcion2.FieldByName('VOLUMENRECEPCION').AsFloat
+             entradaveeder := QL_Recepcion2.FieldByName('VOLUMENFISICO').AsFloat
            else
-             entradaveeder := QL_Recepcion2.FieldByName('VOLUMENFISICO').AsFloat;
+             entradaveeder := QL_Recepcion2.FieldByName('VOLUMENRECEPCION').AsFloat;
 
 
            if FUSIONTANQUES='Si' then begin
@@ -2738,8 +2742,9 @@ begin
   if not FileExists('levanta.txt') then begin
     try
       Carga_Conf;
-      if not pasa_usuario('','',True) then
-        Application.Terminate;
+      if (UpperCase(PIDE_PASSWORD_INICIO)='SI') then
+        if (not pasa_usuario('','',True)) then
+          Application.Terminate;
       Q_Licencia:=TPANQuery.Create('SELECT RAZONSOCIAL FROM DGENEMPR');
       Q_Licencia.ExecQuery;
       razon_social:=Q_Licencia.FieldByName('RAZONSOCIAL').AsString;
@@ -2790,6 +2795,8 @@ begin
 
 
       DBCONSOLA.AliasName:=ParamStr(2);
+
+      tmrOculta.Enabled:=UpperCase(PIDE_PASSWORD_INICIO)='NO';
     except
       on e:exception do
         ShowMessage(e.message);
@@ -4813,6 +4820,12 @@ begin
     Q_Claves.Free;
   end;
 
+end;
+
+procedure TFAJUMENU.tmrOcultaTimer(Sender: TObject);
+begin
+  tmrOculta.Enabled:=False;
+  Close;
 end;
 
 initialization
